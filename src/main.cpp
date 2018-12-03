@@ -36,6 +36,7 @@ void checkTemp( void * parameter )
 void checkImpulse(void *){
     for(;;){
         delay(1000);
+        if(!Actuator::block)
         if(ledcRead(1)||ledcRead(2)){
             Actuator::impulse = false;
             delay(3000);
@@ -49,6 +50,7 @@ void checkImpulse(void *){
 }
 
 void handleImpulse(){
+    Serial.println("IMPULSE");
     Actuator::impulse = true;
 }
 static int tab[10];

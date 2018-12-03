@@ -21,6 +21,7 @@ namespace Actuator {
     static bool closeable = true;
     static volatile bool impulse;
     static void stop();
+    static bool block = false;
     static uint32_t speedTemp = speed;
     static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -66,6 +67,7 @@ namespace Actuator {
 
 
     static void openStep(void*) {
+        block = true;
         if(!openable||ledcRead(Pin1)||ledcRead(Pin2)){
             vTaskDelete(NULL);
             return;
@@ -79,30 +81,34 @@ namespace Actuator {
             ledcWrite(Pin1,(speedTemp+=1)%1023);
             Serial.printf("trying to open with speed of %d\n",speedTemp%1023);
             delay((1024-speedTemp)/20);
-        }while(!impulse&&speedTemp<1000);
-        speedTemp=260;
+        }while(!impulse&&speedTemp<500);
+        openable = speedTemp<=480;
+        speedTemp = 260;
         while(impulse){
-            ledcWrite(Pin2,speedTemp-=3);
+            ledcWrite(Pin1,speedTemp-=5);
             impulse = false;
-            delay(400);
+            delay(1000);
         }
-        ledcWrite(Pin2,speedTemp+20);
 
-        openable = speedTemp>980?false:true;
-
-        ledcWrite(Pin1,openSilentSpeed);
+        ledcWrite(Pin1,speedTemp+15);
         speedTemp = speed;
         int diff = abs(((int)(TempSensor::actualAndTargetTempDifference()*1000)));
         delay((5*diff));
         stop(NULL);
+        block = false;
         vTaskDelete(NULL);
     }
 
     static void closeStep(void*) {
-        if(!closeable||ledcRead(Pin1)||ledcRead(Pin2)){
+        block = true;
+        Serial.printf("CLOSEABLE:%d\n",closeable);
+        Serial.printf("!CLOSEABLE:%d\n",!closeable);
+        if((!closeable)||ledcRead(Pin1)||ledcRead(Pin2)){
+            Serial.println("CANNOT CLOSE CLOEABLE FALSE");
             vTaskDelete(NULL);
             return;
         }
+        Serial.println("CLOSING WINDOW");
         closeable = false;
         openable = true;
         impulse = false;
@@ -112,26 +118,25 @@ namespace Actuator {
             ledcWrite(Pin2,(speedTemp+=1)%1023);
            Serial.printf("1trying to close with speed of %d\n",speedTemp%1023);
             delay((1024-speedTemp)/20);
-        }while(!impulse&&speedTemp<1000);
-        speedTemp=260;
-        Serial.printf("2trying to close with speed of %d\n",speedTemp%1023);
+        }while(!impulse&&speedTemp<500);
+        closeable = speedTemp<=480;
+        speedTemp = 260;
         while(impulse){
             Serial.printf("3trying to close with speed of %d\n",speedTemp%1023);
-            ledcWrite(Pin2,speedTemp-=3);
+            ledcWrite(Pin2,speedTemp-=5);
             impulse = false;
-            delay(400);
+            delay(1000);
+
         }
-        Serial.printf("4trying to close with speed of %d\n",speedTemp%1023);
-        ledcWrite(Pin2,speedTemp+20);
+        Serial.printf("4trying to close with speed of %d\n",(speedTemp%1023)+15);
+        ledcWrite(Pin2,speedTemp+15);
 
-
-
-        closeable = speedTemp>980?false:true;
         if(speedTemp>300)speedTemp = 265;
 
         int diff = abs(((int)(TempSensor::actualAndTargetTempDifference()*1000)));
         delay(5*diff);
         stop(NULL);
+        block = false;
         vTaskDelete(NULL);
     }
 
