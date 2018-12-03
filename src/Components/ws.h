@@ -44,7 +44,7 @@
 //                int speedReceived = root["data"];
 //                Actuator::setSpeed(speedReceived);
 //                uint32_t speed = (uint32_t)speedReceived;
-//                Serial.print("Saving value, debugspeed:");
+//                Serial.handleImpulse("Saving value, debugspeed:");
 //                uint32_t debugspeed;
 //                Serial.println(debugspeed);
 //            } else if (root["type"] == "windowAction") {

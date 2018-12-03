@@ -38,6 +38,7 @@ connection.onmessage = function (e) {
                 document.getElementById('avgTemp').textContent = ((data.data[1]+data.data[0])/2);
                 if(!blocked){
                     document.getElementById('temperatureText').textContent = data.tempSlider;
+                    document.getElementById("temperatureText").style = "display:inline; font-size: xx-large; color:#ff002d";
                     document.getElementById('tempSlider').value = data.tempSlider;
                 }
 
@@ -95,4 +96,5 @@ function changeTemp(){
     blocked = true;
     var temp = document.getElementById('tempSlider').value;
     document.getElementById('temperatureText').textContent = temp.toString();
+    document.getElementById("temperatureText").style = "display:inline; font-size: xx-large; color:LIGHTGREY";
 }

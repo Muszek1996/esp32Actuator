@@ -15,6 +15,8 @@ namespace Actuator {
     static uint32_t speed = 250;
     static const uint8_t Pin1 = 1;
     static const uint8_t Pin2 = 2;
+    static unsigned int openSilentSpeed = 300;
+    static unsigned int closeSilentSpeed = 300;
     static bool openable = true;
     static bool closeable = true;
     static volatile bool impulse;
@@ -22,162 +24,117 @@ namespace Actuator {
     static uint32_t speedTemp = speed;
     static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
+    static bool isImpulse(){
+        bool impTmp = impulse;
+        impulse = false;
+        return impTmp;
+    }
 
     static void setSpeed(int speed) {
         Actuator::speed = speed;
-    }
-
-    static void *close(void *){
-        Serial.println("CLOSING!!!");
-        if(!closeable)return NULL;
-        closeable = false;
-        speedTemp = speed;
-        impulse = false;
-        ledcWrite(Pin1,0);
-        do{
-            ledcWrite(Pin2,(speedTemp+=1)%1023);
-            delay(100);
-        }while(!impulse&&speedTemp<1000);
-
-        while(impulse){
-            impulse = false;
-            ledcWrite(Pin2,speedTemp-30);
-            http::ws.printfAll("CLOSING WHILE IMPULSE %d",speedTemp-30);
-            delay(1000);
-        }
-        closeable = false;
-        speedTemp = speed;
-
-        return NULL;
-    }
-
-    static void *open(void *){
-        Serial.println("OPENING!!!");
-        if(!openable){
-            Serial.println("NON OPENABLE RETURN NULL");
-            return NULL;
-        }
-        openable = false;
-        speedTemp = speed;
-        impulse = false;
-        ledcWrite(Pin2,0);
-        Serial.println("EXECUTING DO WHILE");
-        do{
-            Serial.println("IN DO WHILE ALREADY");
-            delay(0);
-            ledcWrite(Pin1,(speedTemp+=1)%1023);
-            delay(100);
-        }while(!impulse&&speedTemp<1000);
-        Serial.println("EXITED DO WHILE");
-
-        while(impulse){
-            impulse = false;
-            ledcWrite(Pin1,speedTemp-30);
-            http::ws.printfAll("OPENING WHILE IMPULSE %d",speedTemp-30);
-            delay(1000);
-        }
-        openable = false;
-        speedTemp = speed;
-
-        return NULL;
-    }
-
-
-
-
-    static void open() {
-        if(!openable)return;
-        openable = false;
-        uint32_t speedTemp = speed-10;
-        impulse = false;
-        do{
-            ledcWrite(Pin2,0);
-            ledcWrite(Pin1,(speedTemp+=10)%1023);
-            Serial.printf("trying to open with speed of %d\n",speedTemp%1023);
-            delay(400);
-        }while(!impulse&&speedTemp<1000);
-
-        if(speedTemp>980){
-            openable = false;
-        }
-        else{
-            openable = true;
+        if(ledcRead(1)){
+            ledcWrite(1,speed);
+        }else if(ledcRead(2)){
+            ledcWrite(2,speed);
         }
     }
-    static void* openStep(void*) {
-        if(!openable)return NULL;
-        openable = false;
 
-        impulse = false;
-        do{
-            delay(0);
-            ledcWrite(Pin2,0);
-            ledcWrite(Pin1,(speedTemp+=1)%1023);
-           Serial.printf("trying to open with speed of %d\n",speedTemp%1023);
-            delay(100);
-        }while(!impulse&&speedTemp<1000);
-        ledcWrite(Pin1,265);
-        speedTemp = speed-25;
-        if(speedTemp>980){
-            openable = false;
-        }
-        else{
-            openable = true;
-        }
-        delay(1000);
-        stop();
-        return NULL;
-    }
-
-
-    static void close() {
-        if(!closeable)return;
-        closeable = false;
-        uint32_t speedTemp = speed-10;
-        impulse = false;
-        do{
-            ledcWrite(Pin1,0);
-            ledcWrite(Pin2,(speedTemp+=10)%1023);
-            Serial.printf("trying to close with speed of %d\n",speedTemp%1023);
-            delay(400);
-        }while(!impulse&&speedTemp<1000);
-        if(speedTemp>980){
-            closeable = false;
-        }
-        else{
-            closeable = true;
-        }
-    }
-    static void closeStep(void*) {
-        if(!closeable) vTaskDelete(NULL);
-        closeable = false;
-        impulse = false;
-        do{
-            delay(0);
-            ledcWrite(Pin1,0);
-            ledcWrite(Pin2,(speedTemp+=1)%1023);
-           Serial.printf("trying to close with speed of %d\n",speedTemp%1023);
-            delay(100);
-        }while(!impulse&&speedTemp<1000);
-        ledcWrite(Pin2,265);
-        speedTemp = speed-25;
-        if(speedTemp>980){
-            closeable = false;
-        }
-        else{
-            closeable = true;
-        }
-        delay(1000);
-        stop();
+    static void close(void *){
+        Serial.printf("\n\n\nCLOSE WINDOW WITH SPEED %d\n\n\n",speed);
+        Serial.printf("VALUES PIN1:%d,PIN2:%d\n\n",ledcRead(Pin1),ledcRead(Pin2));
+        ledcWrite(1,0);
+        ledcWrite(2,speed);
+        Serial.printf("VALUES PIN1:%d,PIN2:%d",ledcRead(Pin1),ledcRead(Pin2));
         vTaskDelete(NULL);
     }
 
-    static void stop() {
-        openable = true;
-        closeable = true;
-        ledcWrite(Pin1,0);
-        ledcWrite(Pin2,0);
+    static void open(void *){
+        Serial.printf("\n\n\nOPEN WINDOW WITH SPEED %d\n\n\n",speed);
+        Serial.printf("VALUES PIN1:%d,PIN2:%d\n\n",ledcRead(Pin1),ledcRead(Pin2));
+        ledcWrite(1,speed);
+        ledcWrite(2,0);
+        Serial.printf("VALUES PIN1:%d,PIN2:%d",ledcRead(Pin1),ledcRead(Pin2));
+        vTaskDelete(NULL);
     }
+
+    static void stop(void* param) {
+        Serial.printf("CREATED TASK STOP!!!!\n");
+        ledcWrite(1,0);
+        ledcWrite(2,0);
+        vTaskDelete(NULL);
+    }
+
+
+    static void openStep(void*) {
+        if(!openable||ledcRead(Pin1)||ledcRead(Pin2)){
+            vTaskDelete(NULL);
+            return;
+        }
+        openable = false;
+        closeable = true;
+        impulse = false;
+        speedTemp=speed;
+        do{
+            ledcWrite(Pin2,0);
+            ledcWrite(Pin1,(speedTemp+=1)%1023);
+            Serial.printf("trying to open with speed of %d\n",speedTemp%1023);
+            delay((1024-speedTemp)/20);
+        }while(!impulse&&speedTemp<1000);
+        speedTemp=260;
+        while(impulse){
+            ledcWrite(Pin2,speedTemp-=3);
+            impulse = false;
+            delay(400);
+        }
+        ledcWrite(Pin2,speedTemp+20);
+
+        openable = speedTemp>980?false:true;
+
+        ledcWrite(Pin1,openSilentSpeed);
+        speedTemp = speed;
+        int diff = abs(((int)(TempSensor::actualAndTargetTempDifference()*1000)));
+        delay((5*diff));
+        stop(NULL);
+        vTaskDelete(NULL);
+    }
+
+    static void closeStep(void*) {
+        if(!closeable||ledcRead(Pin1)||ledcRead(Pin2)){
+            vTaskDelete(NULL);
+            return;
+        }
+        closeable = false;
+        openable = true;
+        impulse = false;
+        speedTemp = 230;
+        do{
+            ledcWrite(Pin1,0);
+            ledcWrite(Pin2,(speedTemp+=1)%1023);
+           Serial.printf("1trying to close with speed of %d\n",speedTemp%1023);
+            delay((1024-speedTemp)/20);
+        }while(!impulse&&speedTemp<1000);
+        speedTemp=260;
+        Serial.printf("2trying to close with speed of %d\n",speedTemp%1023);
+        while(impulse){
+            Serial.printf("3trying to close with speed of %d\n",speedTemp%1023);
+            ledcWrite(Pin2,speedTemp-=3);
+            impulse = false;
+            delay(400);
+        }
+        Serial.printf("4trying to close with speed of %d\n",speedTemp%1023);
+        ledcWrite(Pin2,speedTemp+20);
+
+
+
+        closeable = speedTemp>980?false:true;
+        if(speedTemp>300)speedTemp = 265;
+
+        int diff = abs(((int)(TempSensor::actualAndTargetTempDifference()*1000)));
+        delay(5*diff);
+        stop(NULL);
+        vTaskDelete(NULL);
+    }
+
 
     static int getSpeed() {
         return speed;

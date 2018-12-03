@@ -11,23 +11,56 @@
 #include <nvs.h>
 #include <esp_system.h>
 
-
-
-void print(){
-    Actuator::impulse = true;
-    http::ws.printfAll("Impulse");
+void getTempsAndReport( void * parameter )
+{
+    /* loop forever */
+    for(;;){
+        TempSensor::getTemps(NULL);
+        webSock::reportTemperatures(NULL);
+        delay(4000);
+    }
+    vTaskDelete( NULL );
+}
+void checkTemp( void * parameter )
+{
+    /* loop forever */
+    for(;;){
+        delay(8000);
+        webSock::checkTemperature(NULL);
+    }
+    /* delete a task when finish,
+    this will never happen because this is infinity loop */
+    vTaskDelete( NULL );
 }
 
+void checkImpulse(void *){
+    for(;;){
+        delay(1000);
+        if(ledcRead(1)||ledcRead(2)){
+            Actuator::impulse = false;
+            delay(3000);
+            if(!Actuator::impulse){
+                Serial.print("\n\n\n\nNO IMPULSE SHUTTING DOWN AN ACTUATOR\n\n\n\n");
+                ledcWrite(1,0);
+                ledcWrite(2,0);
+            }
+        }
+    }
+}
+
+void handleImpulse(){
+    Actuator::impulse = true;
+}
+static int tab[10];
 unsigned long oneSec,tenSec;
 void setup(void) {
-
-
+    esp_log_level_set("*", ESP_LOG_ERROR);
 
     pthread_mutex_init(&webSock::mutexx,NULL);
     oneSec = 0;
     tenSec = 0;
     pinMode(36,INPUT);
-    attachInterrupt(36,print,CHANGE);
+    attachInterrupt(36, handleImpulse, CHANGE);
     ledcAttachPin(2,1);
     ledcAttachPin(4,2);
     ledcSetup(1, 20000, 10);
@@ -37,39 +70,18 @@ void setup(void) {
     Nvs::begin();
     TempSensor::begin();
 
-
-
     wifi::begin();
     webSock::begin();
     http::begin();
     ota::begin();
 
+    xTaskCreatePinnedToCore(getTempsAndReport, "reportTemp", 10240, NULL, 1,NULL,1);
+    xTaskCreatePinnedToCore(checkTemp, "checkTemp", 20480, NULL, 1,NULL,1);
+    xTaskCreatePinnedToCore(checkImpulse, "checkImpulse", 10240, NULL, 1,NULL,1);
 }
 
 
 void loop(void) {
         ArduinoOTA.handle();
-
-    if(millis()> oneSec + 1000){
-        Serial.printf("main millis:%ld\n",millis());
-        ota::handle();
-        TempSensor::getTemps(NULL);
-        //pthread_create(&pthread[0],NULL,TempSensor::getTemps,NULL);
-        //xTaskCreate(TempSensor::getTemps,"getTemp",100000,NULL,tskIDLE_PRIORITY+1,NULL);
-        //xTaskCreate(webSock::reportTemperatures,"rpTemp",100000,NULL,tskIDLE_PRIORITY+1,NULL);
-        //pthread_create(&pthread[1],NULL,webSock::reportTemperatures,NULL);
-        webSock::reportTemperatures(NULL);
-        oneSec = millis();
-    }
-
-    if(millis()> tenSec + 10000){
-        webSock::checkTemperature(NULL);
-        Serial.printf("Temp");
-        //pthread_create(&pthread[2],NULL,webSock::checkTemperature,NULL);
-        //xTaskCreate(webSock::checkTemperature,"ckTemp",100000,NULL,tskIDLE_PRIORITY+1,NULL);
-        tenSec = millis();
-    }
-
-
 }
 

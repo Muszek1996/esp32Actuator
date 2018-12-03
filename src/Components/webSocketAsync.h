@@ -24,6 +24,7 @@ struct tempSpeed{
 namespace webSock {
     pthread_t pthread[2];
     static pthread_mutex_t mutexx;
+    static TaskHandle_t taskHandle;
 
     static void *reportTemperatures(void *param) {
         Serial.println("Reporting temps");
@@ -37,10 +38,10 @@ namespace webSock {
         root["type"] = "TempSensorReadings";
         root["tempSlider"] = TempSensor::getTargetTemp();
         root["speedSlider"] = Actuator::getSpeed();
-//        JsonArray &array = root.createNestedArray("data");
-//        for (int j = 0; j < TempSensor::getICsQuantity(); j++) {
-//            array.add((TempSensor::getLastTemps())[j]);
-//        }
+        JsonArray &array = root.createNestedArray("data");
+           for (int j = 0; j < TempSensor::getICsQuantity(); j++) {
+            array.add((TempSensor::getLastTemps())[j]);
+        }
         size_t len = root.measureLength();
         AsyncWebSocketMessageBuffer * buffer = http::ws.makeBuffer(len);
         if (buffer){
@@ -77,24 +78,18 @@ namespace webSock {
             Serial.printf("CHAR: %d",dir);
                 switch(dir){
                     case 1:{
-                        Serial.println("RECEIVED OPENsa MSG");
-                        if(Actuator::openable){
-                            Serial.println("Creating pthread");
-                            pthread_create(&pthread[0],NULL,&Actuator::open,NULL);
-                            Serial.println("Should be created already");
-                        }
-
+                        Serial.printf("CREATING TASK OPEN!!!!\n");
+                        xTaskCreate(Actuator::open, "openA", 4096, NULL, 2,NULL);
                         break;
                     }
                     case 0:{
-                        Serial.println("RECEIVED CLOSExDD MSG");
-                        if(Actuator::closeable)
-                            pthread_create(&pthread[1],NULL,&Actuator::close,NULL);
+                        Serial.printf("CREATING TASK CLOSE!!!!\n");
+                        xTaskCreate(Actuator::close, "closeA", 4096, NULL, 2,NULL);
                         break;
                     }
-                    default:{
-                        Serial.println("STOP");
-                        Actuator::stop();
+                    case 7:{
+                        Serial.printf("CREATING TASK STOP!!!!\n");
+                        xTaskCreate(Actuator::stop, "stopA", 4096, NULL, 2,NULL);
                         break;
                     }
                 }
@@ -186,15 +181,16 @@ namespace webSock {
             printf("Temp difference: %f\n", tempDifference);
             if(tempDifference>0){
                 Serial.printf("Checked temps and need to close\n");
-                xTaskCreate(&Actuator::closeStep,"tsk",100010,NULL,tskIDLE_PRIORITY+1,NULL);
+                //xTaskCreate(&Actuator::closeStep,"tsk",100010,NULL,tskIDLE_PRIORITY+1,NULL);
+                xTaskCreate(Actuator::closeStep,"closeStep",4096,NULL,1,NULL);
                // pthread_create(&pthread[0],NULL,&Actuator::closeStep,NULL);
             }
             else{
                Serial.printf("Checked temps and need to open\n");
-                pthread_create(&pthread[1],NULL,&Actuator::openStep,NULL);
+                //pthread_create(&pthread[1],NULL,&Actuator::openStep,NULL);
+                xTaskCreate(Actuator::openStep,"openStep",4096,NULL,1,NULL);
             }
-        }else
-            Actuator::stop();
+        }
         return NULL;
     }
 }
