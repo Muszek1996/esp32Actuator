@@ -7,7 +7,7 @@
 
 #include <WiFi.h>
 
-
+int a = 0;
 
 namespace wifi{
 
@@ -31,6 +31,7 @@ namespace wifi{
 
 
     while (WiFi.status() != WL_CONNECTED) {
+        if(a++==10)ESP.restart();
         delay(500);
         Serial.print(".");
     }

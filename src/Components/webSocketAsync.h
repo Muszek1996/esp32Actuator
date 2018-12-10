@@ -79,17 +79,17 @@ namespace webSock {
                 switch(dir){
                     case 1:{
                         Serial.printf("CREATING TASK OPEN!!!!\n");
-                        xTaskCreate(Actuator::open, "openA", 4096, NULL, 2,NULL);
+                        xTaskCreatePinnedToCore(Actuator::open, "openA", 4096, NULL, 2,NULL,1);
                         break;
                     }
                     case 0:{
                         Serial.printf("CREATING TASK CLOSE!!!!\n");
-                        xTaskCreate(Actuator::close, "closeA", 4096, NULL, 2,NULL);
+                        xTaskCreatePinnedToCore(Actuator::close, "closeA", 4096, NULL, 2,NULL,1);
                         break;
                     }
                     case 7:{
                         Serial.printf("CREATING TASK STOP!!!!\n");
-                        xTaskCreate(Actuator::stop, "stopA", 4096, NULL, 2,NULL);
+                        xTaskCreatePinnedToCore(Actuator::stop, "stopA", 4096, NULL, 2,NULL,1);
                         break;
                     }
                 }
