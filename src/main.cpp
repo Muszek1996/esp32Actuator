@@ -65,10 +65,8 @@ void checkImpulse(void *){
 }
 
 void handleImpulse(){
-    if(!Actuator::impulse){
         Actuator::impulse = true;
         Serial.println("IMPULSE");
-    }
 
 }
 static int tab[10];
@@ -82,9 +80,9 @@ void setup(void) {
     pthread_mutex_init(&webSock::mutexx,NULL);
     oneSec = 0;
     tenSec = 0;
-    pinMode(36,INPUT);
+    pinMode(16,INPUT);
     analogSetWidth(12);
-    attachInterrupt(digitalPinToInterrupt(36), handleImpulse, FALLING);
+   // attachInterrupt(digitalPinToInterrupt(16), handleImpulse, LOW);
     ledcAttachPin(25,1);
     ledcAttachPin(26,2);
     ledcSetup(1, 20000, 10);
@@ -105,10 +103,18 @@ void setup(void) {
     xTaskCreate(checkTemp, "checkTemp", 20480, NULL, 1,NULL);
     xTaskCreate(checkImpulse, "checkImpulse", 10240, NULL, 1,NULL);
 }
-
+int impulse = 0;
+int prevState = 0;
 
 void loop(void) {
-    //Serial.printf("IMPULSE:%d\n",analogRead(36));
+    impulse = digitalRead(16);
+    if(impulse != prevState){
+        prevState = impulse;
+        Actuator::impulse = true;
+        if(impulse)
+        Serial.printf("IMPULSE:%d\n",impulse);
+    }
+
         ArduinoOTA.handle();
 }
 
