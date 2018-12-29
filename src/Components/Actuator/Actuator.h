@@ -9,144 +9,107 @@
 #include <Arduino.h>
 #include "../webSocketAsync.h"
 #include <pthread.h>
+#include <Stepper.h>
 
+static TaskHandle_t xHandle = NULL;
+static TaskHandle_t closeHandle = NULL;
+static TaskHandle_t openHandle = NULL;
+
+
+static Stepper stepper(200, 13, 12, 14, 27);
+
+static void closeTillClosed(void *);
+static void closeV(void *);
+static void openTillOpened(void *);
+static void openV(void *);
+static void stopV(void* );
 
 namespace Actuator {
-    static uint32_t speed = 250;
-    static const uint8_t Pin1 = 1;
-    static const uint8_t Pin2 = 2;
-    static unsigned int openSilentSpeed = 300;
-    static unsigned int closeSilentSpeed = 300;
-    static bool openable = true;
-    static bool closeable = true;
-    static volatile bool impulse;
-    static void stop();
-    static bool block = false;
-    static uint32_t speedTemp = speed;
-    static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-    static bool isImpulse(){
-        bool impTmp = impulse;
-        impulse = false;
-        return impTmp;
+
+    static void stop(){
+        xTaskCreate(stopV,"stop",4096,NULL,1,NULL);
     }
-
     static void setSpeed(int speed) {
-        Actuator::speed = speed;
-        if(ledcRead(1)){
-            ledcWrite(1,speed);
-        }else if(ledcRead(2)){
-            ledcWrite(2,speed);
-        }
+        stepper.setSpeed(speed);
     }
-
-    static void close(void *){
-        ledcWrite(1,0);
-        ledcWrite(2,speed);
-        vTaskDelete(NULL);
-    }
-
-    static void open(void *){
-        ledcWrite(1,speed);
-        ledcWrite(2,0);
-        vTaskDelete(NULL);
-    }
-
-    static void stop(void* param) {
-        ledcWrite(1,0);
-        ledcWrite(2,0);
-        vTaskDelete(NULL);
-    }
-
-
-    static void openStep(void*) {
-        if((!ledcRead(1))&&(!ledcRead(2)))block = false;
-        Serial.printf("Openable:%d LedcRead(1):%dLedcRead(2):%d block:%d\n",openable,ledcRead(1),ledcRead(2),block);
-        if((!openable)||ledcRead(Pin1)||ledcRead(Pin2)||block){
-            Serial.println("CANNOT open openable FALSE");
-            delay(50);
-            vTaskDelete(NULL);
-            return;
-        }
-        block = true;
-        openable = false;
-        closeable = true;
-        impulse = false;
-        speedTemp=speed;
-        do{
-            ledcWrite(Pin2,0);
-            ledcWrite(Pin1,(speedTemp+=1)%1023);
-            Serial.printf("trajing to open with speed of %d\n",speedTemp);
-            delay((1425-speedTemp)/20);
-        }while(!impulse&&speedTemp<1224);
-
-        Serial.printf("SpeedTemp:%d, < 1204 : %d\n",speedTemp,speedTemp<=1204);
-        openable = speedTemp<=1204;
-        Serial.printf("openable : %d\n",openable);
-        speedTemp = 280;
-        while(impulse){
-            Serial.printf("3trying to open with speed of %d\n",speedTemp%1023);
-            ledcWrite(Pin1,speedTemp-=5);
-            impulse = false;
-            delay(2000);
-        }
-        Serial.printf("4trying to open with speed of %d\n",(speedTemp%1023)+15);
-        ledcWrite(Pin1,speedTemp+15);
-        speedTemp = speed;
-        block = false;
-        int diff = abs(((int)(TempSensor::actualAndTargetTempDifference()*1000)));
-        delay((5*diff+1000));
-        Serial.println("BLOCK = FALSE");
-        stop(NULL);
-        delay(50);
-        vTaskDelete(NULL);
-    }
-
-    static void closeStep(void*) {
-        if((!ledcRead(1))&&(!ledcRead(2)))block = false;
-        Serial.printf("CLOSEABLE:%d\n",closeable);
-        if((!closeable)||ledcRead(Pin1)||ledcRead(Pin2)||block){
-            Serial.println("CANNOT CLOSE CLOEABLE FALSE");
-            delay(50);
-            vTaskDelete(NULL);
-            return;
-        }
-        block = true;
-        Serial.println("CLOSING WINDOW");
-        closeable = false;
-        openable = true;
-        impulse = false;
-        speedTemp = 230;
-        do{
-            ledcWrite(Pin1,0);
-            ledcWrite(Pin2,(speedTemp+=1)%1023);
-           Serial.printf("1trying to close with speed of %d\n",speedTemp%1023);
-            delay((1425-speedTemp)/20);
-        }while(!impulse&&speedTemp<1224);
-        closeable = speedTemp<=1204;
-        speedTemp = 280;
-        while(impulse){
-            Serial.printf("3trying to close with speed of %d\n",speedTemp%1023);
-            ledcWrite(Pin2,speedTemp-=5);
-            impulse = false;
-            delay(2000);
-        }
-        Serial.printf("4trying to close with speed of %d\n",(speedTemp%1023)+35);
-        ledcWrite(Pin2,speedTemp+35);
-        speedTemp = speed;
-        block = false;
-        int diff = abs(((int)(TempSensor::actualAndTargetTempDifference()*1000)));
-        delay(5*diff+1000);
-        stop(NULL);
-        delay(50);
-        vTaskDelete(NULL);
-    }
-
 
     static int getSpeed() {
-        return speed;
+        return stepper.getSpeed();
     }
+
+    static void close(){
+        stop();
+        xTaskCreate(closeTillClosed,"close",4096,NULL,1,&xHandle);
+    }
+
+    static void open(){
+        stop();
+        xTaskCreate(openTillOpened,"open",4096,NULL,1,&xHandle);
+    }
+
+
+    static void close5Rev(){
+        Serial.printf("xhandle : %d",xHandle);
+        if(xHandle == NULL)
+        xTaskCreate(closeV,"close5Rev",4096,NULL,1,&xHandle);
+        else Serial.printf("HANDLE BUSY");
+    }
+
+    static void open5Rev(){
+        Serial.printf("xhandle : %d",xHandle);
+        if(xHandle == NULL)
+        xTaskCreate(openV,"open5Rev",4096,NULL,1,&xHandle);
+        else Serial.printf("HANDLE BUSY");
+    }
+
+
+
 };
 
 
+static void closeTillClosed(void *){
+    stepper.setSpeed(Actuator::getSpeed());
+
+    while(digitalRead(39)&&xHandle)
+        stepper.step(1000);
+    closeHandle = NULL;
+    vTaskDelete(NULL);
+}
+
+static void closeV(void *){
+    stepper.setSpeed(Actuator::getSpeed());
+    if(digitalRead(39))
+        stepper.step(1000);
+    xHandle = NULL;
+    vTaskDelete(NULL);
+}
+
+static void openTillOpened(void *){
+    stepper.setSpeed(Actuator::getSpeed());
+    while(digitalRead(36)&&xHandle)
+        stepper.step(-1000);
+    openHandle = NULL;
+    vTaskDelete(NULL);
+}
+static void openV(void *){
+    stepper.setSpeed(Actuator::getSpeed());
+    if(digitalRead(36))
+        stepper.step(-1000);
+    xHandle = NULL;
+    vTaskDelete(NULL);
+}
+
+static void stopV(void* ) {
+    if(xHandle){
+        vTaskDelete(xHandle);
+        xHandle = NULL;
+    }
+    stepper.stop();
+    vTaskDelete(NULL);
+}
+
+
+
 #endif //ESP12E_ACTUATOR_H
+

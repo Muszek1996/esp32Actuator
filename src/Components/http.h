@@ -6,19 +6,22 @@
 #define ACTUATORV2_HTTP_H
 
 
-//#include "../../../../../.platformio/packages/framework-arduinoespressif8266/libraries/ESP8266WebServer/src/ESP8266WebServer.h"
 #include <WiFi.h>
 #include <SPIFFS.h>   // Include the SPIFFS library
 #include <ESPAsyncWebServer.h>
 
-namespace http{
+AsyncWebServer server(80);
 
-    static AsyncWebServer server(80);
-    static AsyncWebSocket ws("/ws");
-    static AsyncEventSource events("/events");
+namespace http{
+    void addHandler(AsyncWebHandler *handler){
+        server.addHandler(handler);
+    }
+
 
 
     static void begin() {
+
+
         // Initialize SPIFFS
         if(!SPIFFS.begin(true)){
             Serial.println("An Error has occurred while mounting SPIFFS");

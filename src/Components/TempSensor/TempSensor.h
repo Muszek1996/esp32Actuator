@@ -10,7 +10,8 @@
 #include <DallasTemperature.h>
 #include <Arduino.h>
 #include "../http.h"
-
+OneWire oneWire(15);
+DallasTemperature sensors(&oneWire);
 
 namespace TempSensor {
     static const int tempBias = -2;
@@ -19,24 +20,23 @@ namespace TempSensor {
     static double getTargetTemp();
     static void setTargetTemp(double targetTemp);
     static double targetTemp = 22;
-    static const double tolerance = 0.05;
-    static OneWire oneWire(15);
-    static DallasTemperature sensors(&oneWire);
+    static const double tolerance = 0.025;
+
     static const uint8_t getICsQuantity();
     static double getAverageTemp();
-    static pthread_mutex_t mutex;
+
 
     static double *getLastTemps();
 
     static double actualAndTargetTempDifference(){   // zwraca nadwyżkę temperatury+/niedobór-;
-        double averageTemp = getAverageTemp();
+       double averageTemp = getAverageTemp();
         if(averageTemp>(targetTemp+tolerance)||averageTemp<(targetTemp-tolerance))return ((targetTemp+tolerance)-averageTemp);
         else return 0;
     }
 
     static void begin(){
         sensors.begin();
-        pthread_mutex_init(&mutex,NULL);
+
     }
 
 
@@ -49,7 +49,7 @@ namespace TempSensor {
             double temp = (sensors.getTempCByIndex(iCsQuantity-1-i)+tempBias);
             if(temp>0&&temp<40){
                 if(i==0){
-                    lastTemps[i]=(temp-1);
+                    lastTemps[i]=(temp-1);  // TODO temp-1;
                 }else{
                     lastTemps[i]=temp;
                 }
@@ -85,10 +85,7 @@ namespace TempSensor {
     }
 
     void setTargetTemp(double tTemp) {
-        pthread_mutex_lock(&mutex);
-        http::ws.printfAll("Setter temp to %f",tTemp);
         targetTemp = tTemp;
-        pthread_mutex_unlock(&mutex);
     }
 
     double *getLastTemps() {

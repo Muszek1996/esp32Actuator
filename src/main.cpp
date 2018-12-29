@@ -13,23 +13,19 @@
 #include <Stepper.h>
 bool val = true;
 
-void getTempsAndReport( void * parameter )
-{
-    /* loop forever */
-    for(;;){
-        TempSensor::getTemps(NULL);
-        webSock::reportTemperatures(NULL);
-        delay(4000);
-    }
-    delay(50);
-    vTaskDelete( NULL );
-}
+
 void checkTemp( void * parameter )
 {
     /* loop forever */
     for(;;){
-        delay(8000);
-        webSock::checkTemperature(NULL);
+        delay(1000);
+        double diff = abs(TempSensor::actualAndTargetTempDifference());
+        int waitTime = static_cast<int>(999.0/diff);
+        if(diff){
+            Serial.printf("CHECKING TEMP DIFF IS (%f) DELAY IS(%d)\n",diff,waitTime);
+            delay(waitTime);
+            webSock::checkTemperature(NULL);
+        }
     }
     /* delete a task when finish,
     this will never happen because this is infinity loop */
@@ -50,79 +46,25 @@ void blink(void *){
 
 
 
-void checkImpulse(void *){
-    for(;;){
-        delay(1000);
-        if(!Actuator::block){
-            Actuator::impulse = false;
-            delay(5000);
-            if(!Actuator::impulse){
-                Serial.print("\n\n\n\nNO IMPULSE SHUTTING DOWN AN ACTUATOR\n\n\n\n");
-                ledcWrite(1,0);
-                ledcWrite(2,0);
-            }
-        }
-    }
-}
-
-void handleImpulse(){
-        Actuator::impulse = true;
-        Serial.println("IMPULSE");
-}
-static int tab[10];
-unsigned long oneSec,tenSec;
-
-
-Stepper stepper(200, 13, 12, 14, 27);
 
 void setup(void) {
-
-
-
-
-    pinMode(2,OUTPUT);
-    pinMode(34,OUTPUT);
-    digitalWrite(34,LOW);
-    esp_log_level_set("*", ESP_LOG_ERROR);
-
-    pthread_mutex_init(&webSock::mutexx,NULL);
-    oneSec = 0;
-    tenSec = 0;
-    pinMode(16,INPUT);
-    analogSetWidth(12);
-   // attachInterrupt(digitalPinToInterrupt(16), handleImpulse, LOW);
-    ledcAttachPin(25,1);
-    ledcAttachPin(26,2);
-    ledcSetup(1, 20000, 10);
-    ledcSetup(2, 20000, 10);
     Serial.begin(115200);
 
-    Nvs::begin();
-    TempSensor::begin();
+    pinMode(2,OUTPUT);  // 1 s blinking diode
+    pinMode(36,INPUT);  //end close window
+    pinMode(39,INPUT);  //endsensor open window
 
     wifi::begin();
-    webSock::begin();
+    Nvs::begin();
+    TempSensor::begin();
     http::begin();
-    ota::begin();
-    //TODO pinned to core if err;
+    webSock::begin();
 
-    xTaskCreate(getTempsAndReport, "reportTemp", 10240, NULL, 1,NULL);
-    xTaskCreate(blink, "blink", 2048, NULL, 1,NULL);
-    xTaskCreate(checkTemp, "checkTemp", 20480, NULL, 1,NULL);
-    xTaskCreate(checkImpulse, "checkImpulse", 10240, NULL, 1,NULL);
+    xTaskCreate(blink, "blink", 4096, NULL, tskIDLE_PRIORITY+1,NULL);
+    xTaskCreate(checkTemp, "checkTemp", 20480, NULL, tskIDLE_PRIORITY+1,NULL);
 }
-int impulse = 0;
-int prevState = 0;
+
 
 void loop(void) {
-    impulse = digitalRead(16);
-    if(impulse != prevState){
-        prevState = impulse;
-        Actuator::impulse = true;
-        if(impulse)
-        Serial.printf("IMPULSE:%d\n",impulse);
-    }
 
-        ArduinoOTA.handle();
 }
-

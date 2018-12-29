@@ -142,6 +142,13 @@ Stepper::Stepper(int number_of_steps, int motor_pin_1, int motor_pin_2,
  *   constructor for five phase motor with five wires
  *   Sets which wires should control the motor.
  */
+void Stepper::stop(){
+  digitalWrite(motor_pin_1, LOW);
+  digitalWrite(motor_pin_2, LOW);
+  digitalWrite(motor_pin_3, LOW);
+  digitalWrite(motor_pin_4, LOW);
+}
+
 Stepper::Stepper(int number_of_steps, int motor_pin_1, int motor_pin_2,
                                       int motor_pin_3, int motor_pin_4,
                                       int motor_pin_5)
@@ -175,6 +182,11 @@ Stepper::Stepper(int number_of_steps, int motor_pin_1, int motor_pin_2,
 void Stepper::setSpeed(long whatSpeed)
 {
   this->step_delay = 60L * 1000L * 1000L / this->number_of_steps / whatSpeed;
+  this->speed = whatSpeed;
+}
+
+int Stepper::getSpeed(){
+  return this->speed;
 }
 
 /*
@@ -224,6 +236,7 @@ void Stepper::step(int steps_to_move)
         stepMotor(this->step_number % 4);
     }
   }
+  stop();
 }
 
 /*

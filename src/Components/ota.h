@@ -21,13 +21,7 @@ namespace ota{
     //ArduinoOTA.setPassword((const char *)"K0nr4f4l");
     void init(){
         ArduinoOTA.onStart([]() {
-            http::ws.enable(false);
 
-            // Advertise connected clients what's going on
-            http::ws.textAll("OTA Update Started");
-
-            // Close them
-            http::ws.closeAll();
 
             Serial.println("Start");
         });

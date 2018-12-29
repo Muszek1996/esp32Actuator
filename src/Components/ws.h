@@ -12,12 +12,12 @@
 //
 //#ifndef NEWNODE_WEBSOCKETS_H
 //#define NEWNODE_WEBSOCKETS_H
-//static void * close (void*){
-//    Actuator::close();
+//static void * close5Rev (void*){
+//    Actuator::close5Rev();
 //}
 //
-//static void * open (void*){
-//    Actuator::open();
+//static void * open5Rev (void*){
+//    Actuator::open5Rev();
 //}
 //
 //
@@ -49,9 +49,9 @@
 //                Serial.println(debugspeed);
 //            } else if (root["type"] == "windowAction") {
 //                if (root["data"] == "1") {
-//                    Actuator::close();
+//                    Actuator::close5Rev();
 //                } else if (root["data"] == "0") {
-//                    Actuator::open();
+//                    Actuator::open5Rev();
 //                } else {
 //                    Actuator::stop();
 //                }
@@ -146,9 +146,9 @@
 //        double tempDifference = TempSensor::actualAndTargetTempDifference();
 //        if(tempDifference!=0){
 //            if(tempDifference>0)
-//                Actuator::open();
+//                Actuator::open5Rev();
 //            else
-//                Actuator::close();
+//                Actuator::close5Rev();
 //        }else
 //            Actuator::stop();
 //

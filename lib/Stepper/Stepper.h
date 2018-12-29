@@ -93,6 +93,9 @@ class Stepper {
     // speed setter method:
     void setSpeed(long whatSpeed);
 
+    int getSpeed();
+    void stop();
+
     // mover method:
     void step(int number_of_steps);
 
@@ -100,13 +103,12 @@ class Stepper {
 
   private:
     void stepMotor(int this_step);
-
+    int speed;
     int direction;            // Direction of rotation
     unsigned long step_delay; // delay between steps, in ms, based on speed
     int number_of_steps;      // total number of steps this motor can take
     int pin_count;            // how many pins are in use.
     int step_number;          // which step the motor is on
-
     // motor pin numbers:
     int motor_pin_1;
     int motor_pin_2;

@@ -14,24 +14,14 @@
 #include "nvs.h"
 #include <pthread.h>
 
-
-
-struct tempSpeed{
-    double temp;
-    int speed;
-};
+AsyncWebSocket ws("/ws");
 
 namespace webSock {
-    pthread_t pthread[2];
-    static pthread_mutex_t mutexx;
-    static TaskHandle_t taskHandle;
 
-    static void *reportTemperatures(void *param) {
+
+    static void *reportTemperatures(AsyncWebSocketClient * client) {
+        TempSensor::getTemps(NULL);
         Serial.println("Reporting temps");
-        if(!http::ws.count()){
-            Serial.println("No clients not reporting shit to noone");
-            return NULL;
-        }
         Serial.println("Have clients reporting them shit");
         DynamicJsonBuffer jsonBuffer;
         JsonObject & root = jsonBuffer.createObject();
@@ -43,12 +33,12 @@ namespace webSock {
             array.add((TempSensor::getLastTemps())[j]);
         }
         size_t len = root.measureLength();
-        AsyncWebSocketMessageBuffer * buffer = http::ws.makeBuffer(len);
+        AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len);
         if (buffer){
             root.printTo((char *)buffer->get(), len + 1);
-            http::ws.textAll(buffer);
+            client->text(buffer);
         }
-        Serial.println("reported temps to all msg sent sReturning");
+        Serial.println("reported temps to client");
         return NULL;
     }
 
@@ -65,7 +55,6 @@ namespace webSock {
         Serial.printf("RECEIVED TYPE:%s\n",type.c_str());
         if(type=="tempOnSlider"){
             double tempReceived = root["data"].as<double>();
-            http::ws.printfAll("Setting temp to %f",tempReceived);
             printf("Setting temp to %f",tempReceived);
             TempSensor::setTargetTemp(tempReceived);
             Nvs::save(tempReceived);
@@ -79,30 +68,30 @@ namespace webSock {
                 switch(dir){
                     case 1:{
                         Serial.printf("CREATING TASK OPEN!!!!\n");
-                        xTaskCreatePinnedToCore(Actuator::open, "openA", 4096, NULL, 2,NULL,1);
+                        Actuator::open();
                         break;
                     }
                     case 0:{
                         Serial.printf("CREATING TASK CLOSE!!!!\n");
-                        xTaskCreatePinnedToCore(Actuator::close, "closeA", 4096, NULL, 2,NULL,1);
+                        Actuator::close();
                         break;
                     }
                     case 7:{
                         Serial.printf("CREATING TASK STOP!!!!\n");
-                        xTaskCreatePinnedToCore(Actuator::stop, "stopA", 4096, NULL, 2,NULL,1);
+                        Actuator::stop();
                         break;
                     }
                 }
         }
         Serial.println("Reporting temps");
-        reportTemperatures(NULL);
-        return;
+        reportTemperatures(client);
     }
     static void handleConnected(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len){
         Serial.printf("Connected");
         Serial.printf("ws[%s][%u] connect\n", server->url(), client->id());
         client->printf("Hello Client %u :)", client->id());
         client->ping();
+        reportTemperatures(client);
     }
     static void handleDisconnected(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len){
         Serial.printf("ws[%s] disconnect: %u\n", server->url(), client->id());
@@ -126,72 +115,64 @@ namespace webSock {
 
     static void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
 
-//        switch(type){
-//            case WS_EVT_CONNECT:
-//                handleConnected(server,client,type,arg,data,len);
-//                break;
-//            case  WS_EVT_DISCONNECT:
-//                        handleDisconnected(server, client, type, arg, data, len);
-//                break;
-//            case WS_EVT_ERROR:
-//                        handleError(server,client,type,arg,data,len);
-//                break;
-//            case WS_EVT_PONG:
-//                        handlePong(server,client,type,arg,data,len);
-//                break;
-//            case WS_EVT_DATA:
-//                        handleData(server,client,type,arg,data,len);
-//                break;
-//            default:
-//
-//                break;
-//        }
+        switch(type){
+            case WS_EVT_CONNECT:
+                        handleConnected(server,client,type,arg,data,len);
+                break;
+            case WS_EVT_DISCONNECT:
+                        handleDisconnected(server, client, type, arg, data, len);
+                break;
+            case WS_EVT_ERROR:
+                        handleError(server,client,type,arg,data,len);
+                break;
+            case WS_EVT_PONG:
+                        handlePong(server,client,type,arg,data,len);
+                break;
+            case WS_EVT_DATA:
+                        handleData(server,client,type,arg,data,len);
+                break;
+            default:
 
-            if(type == WS_EVT_CONNECT){
-
-                handleConnected(server,client,type,arg,data,len);
-            }else if(type == WS_EVT_DISCONNECT){
-                handleDisconnected(server, client, type, arg, data, len);
-            }else if(type == WS_EVT_ERROR){
-                //Serial.printf("URL:%s\n",server->url());
-                //Serial.printf("ID:%u\n",client->id());
-                //Serial.printf("ARG:%u\n",*((uint16_t*)arg));
-                //Serial.printf("DATA:%s\n",(char*)data);
+                break;
+        }
 
 
-                //Serial.printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
-                //handleError(server,client,type,arg,data,len);
-            }else if(type == WS_EVT_PONG){
-                handlePong(server,client,type,arg,data,len);
-            }else if(type == WS_EVT_DATA){
-                    handleData(server,client,type,arg,data,len);
-            }
         }
 
 
 
     static void begin(){
-        http::ws.onEvent(onWsEvent);
-        http::server.addHandler(&http::ws);
+       ws.onEvent(onWsEvent);
+       http::addHandler(&ws);
     }
 
-    static void *checkTemperature(void *param) {
+    static void checkTemperature(void *param) {
+
         double tempDifference = TempSensor::actualAndTargetTempDifference();
         if(tempDifference!=0){
-            printf("Temp difference: %f\n", tempDifference);
+
+           printf("Temp difference: %f\n", tempDifference);
             if(tempDifference>0){
-                Serial.printf("Checked temps and need to close\n");
-                //xTaskCreate(&Actuator::closeStep,"tsk",100010,NULL,tskIDLE_PRIORITY+1,NULL);
-                xTaskCreate(Actuator::closeStep,"closeStep",4096,NULL,1,NULL);
+                Serial.printf("Checked temps and need to close5Rev\n");
+
+                if(digitalRead(39))
+                Actuator::close5Rev();
+                else{
+                    Serial.println("Cant Close cuz closed");
+                }
                // pthread_create(&pthread[0],NULL,&Actuator::closeStep,NULL);
             }
             else{
-               Serial.printf("Checked temps and need to open\n");
-                //pthread_create(&pthread[1],NULL,&Actuator::openStep,NULL);
-                xTaskCreate(Actuator::openStep,"openStep",4096,NULL,1,NULL);
+               Serial.printf("Checked temps and need to open5Rev\n");
+               if(digitalRead(36))
+                Actuator::open5Rev();
+               else{
+                   Serial.println("Cant Open cuz opened");
+               }
+               // xTaskCreate(Actuator::open5Rev,"openStep",4096,NULL,1,NULL);
             }
         }
-        return NULL;
+
     }
 }
 
