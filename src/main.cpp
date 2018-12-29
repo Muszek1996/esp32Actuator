@@ -10,6 +10,7 @@
 #include <nvs_flash.h>
 #include <nvs.h>
 #include <esp_system.h>
+#include <Stepper.h>
 bool val = true;
 
 void getTempsAndReport( void * parameter )
@@ -67,11 +68,18 @@ void checkImpulse(void *){
 void handleImpulse(){
         Actuator::impulse = true;
         Serial.println("IMPULSE");
-
 }
 static int tab[10];
 unsigned long oneSec,tenSec;
+
+
+Stepper stepper(200, 13, 12, 14, 27);
+
 void setup(void) {
+
+
+
+
     pinMode(2,OUTPUT);
     pinMode(34,OUTPUT);
     digitalWrite(34,LOW);
